@@ -191,7 +191,7 @@
 				CODE_SIGN_ENTITLEMENTS = AgeWalletDemo/AgeWalletDemo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F5T3W2C69Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgeWalletDemo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -219,7 +219,7 @@
 				CODE_SIGN_ENTITLEMENTS = AgeWalletDemo/AgeWalletDemo.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F5T3W2C69Y;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgeWalletDemo/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

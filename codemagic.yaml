@@ -1,0 +1,27 @@
+workflows:
+  ios-native-demo:
+    name: iOS Native Demo
+    instance_type: mac_mini_m2
+    environment:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: io.agewallet.sdk.demo.ios
+      xcode: latest
+    scripts:
+      - name: Register test devices
+        script: |
+          app-store-connect devices register "Ash's iPhone" "00008150-001A0DE826B8401C"
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project example/AgeWalletDemo/AgeWalletDemo.xcodeproj \
+            --scheme AgeWalletDemo
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
