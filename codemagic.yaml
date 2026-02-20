@@ -36,6 +36,7 @@ workflows:
           xcode-project build-ipa \
             --project example/AgeWalletDemo/AgeWalletDemo.xcodeproj \
             --scheme AgeWalletDemo \
+            --verbose \
             --archive-flags="-destination 'generic/platform=iOS' COMPILER_INDEX_STORE_ENABLE=NO DEVELOPMENT_TEAM=F5T3W2C69Y CODE_SIGN_IDENTITY='Apple Distribution' CODE_SIGN_STYLE=Manual"
     artifacts:
       - build/ios/ipa/*.ipa
