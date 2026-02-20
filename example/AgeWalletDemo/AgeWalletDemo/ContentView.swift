@@ -28,6 +28,18 @@ struct ContentView: View {
         .onAppear {
             checkVerification()
         }
+        .onOpenURL { url in
+            guard url.host == "agewallet-sdk-demo.netlify.app",
+                  url.path.hasPrefix("/callback") else { return }
+            isLoading = true
+            Task {
+                let result = await ageWallet.handleCallback(url: url)
+                await MainActor.run {
+                    isVerified = result
+                    isLoading = false
+                }
+            }
+        }
         .alert("Error", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -44,29 +56,11 @@ struct ContentView: View {
     }
 
     private func startVerification() {
-        guard let window = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }) else {
-            errorMessage = "Could not find window"
-            return
-        }
-
-        isLoading = true
-
-        Task {
-            do {
-                let result = try await ageWallet.startVerification(from: window)
-                await MainActor.run {
-                    isVerified = result
-                    isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isLoading = false
-                }
-            }
+        do {
+            let url = try ageWallet.buildVerificationURL()
+            UIApplication.shared.open(url)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -1,5 +1,4 @@
 import Foundation
-import AuthenticationServices
 
 /// AgeWallet SDK for iOS applications.
 ///
@@ -12,15 +11,18 @@ import AuthenticationServices
 ///     redirectUri: "https://yourapp.com/callback"
 /// ))
 ///
-/// if !ageWallet.isVerified() {
-///     try await ageWallet.startVerification(from: window)
+/// // Build the authorization URL and open it in Safari
+/// if let url = try? ageWallet.buildVerificationURL() {
+///     UIApplication.shared.open(url)
 /// }
+///
+/// // Handle the callback URL (received via universal link / onOpenURL)
+/// let verified = await ageWallet.handleCallback(url: callbackURL)
 /// ```
 @available(iOS 14.0, macOS 11.0, *)
 public final class AgeWallet {
     private let config: AgeWalletConfig
     private let storage = Storage()
-    private var authSession: ASWebAuthenticationSession?
 
     /// Initialize AgeWallet SDK.
     /// - Parameter config: SDK configuration
@@ -34,72 +36,35 @@ public final class AgeWallet {
         storage.getVerification()?.isVerified ?? false
     }
 
-    /// Start the verification flow.
+    /// Build the authorization URL to open in a browser.
     ///
-    /// Opens a secure browser session to the AgeWallet authorization page.
-    /// The callback is handled automatically.
+    /// Opens this URL in Safari (or any browser). After the user authenticates,
+    /// the server redirects to your redirect URI. iOS delivers that URL to the app
+    /// via universal links — pass it to `handleCallback(url:)`.
     ///
-    /// - Parameter anchor: The window to present the authentication session from
-    /// - Returns: true if verification succeeded, false otherwise
-    /// - Throws: AgeWalletError if authentication fails
-    @MainActor
-    public func startVerification(from anchor: ASPresentationAnchor) async throws -> Bool {
-        // Generate PKCE parameters
+    /// - Returns: The authorization URL to open
+    /// - Throws: AgeWalletError.invalidConfiguration if the config is invalid
+    public func buildVerificationURL() throws -> URL {
         let verifier = Security.generateVerifier()
         let challenge = Security.generateChallenge(from: verifier)
         let state = Security.generateState()
         let nonce = Security.generateNonce()
 
-        // Store OIDC state for callback validation
         storage.setOidcState(OidcState(state: state, verifier: verifier, nonce: nonce))
 
-        // Build authorization URL
         guard let authURL = buildAuthURL(challenge: challenge, state: state, nonce: nonce) else {
             storage.clearOidcState()
             throw AgeWalletError.invalidConfiguration
         }
 
-        // Get callback URL scheme — use nil for https/http so universal links handle the callback
-        guard let redirectURL = URL(string: config.redirectUri),
-              let scheme = redirectURL.scheme else {
-            storage.clearOidcState()
-            throw AgeWalletError.invalidConfiguration
-        }
-        let callbackScheme: String? = (scheme == "https" || scheme == "http") ? nil : scheme
-
-        // Start authentication session
-        let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            let session = ASWebAuthenticationSession(
-                url: authURL,
-                callbackURLScheme: callbackScheme
-            ) { [weak self] callbackURL, error in
-                self?.authSession = nil
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else if let callbackURL = callbackURL {
-                    continuation.resume(returning: callbackURL)
-                } else {
-                    continuation.resume(throwing: AgeWalletError.cancelled)
-                }
-            }
-
-            session.presentationContextProvider = PresentationContextProvider(anchor: anchor)
-            session.prefersEphemeralWebBrowserSession = false
-
-            self.authSession = session
-
-            if !session.start() {
-                self.authSession = nil
-                continuation.resume(throwing: AgeWalletError.sessionFailed)
-            }
-        }
-
-        // Handle the callback
-        return await handleCallback(url: callbackURL)
+        return authURL
     }
 
     /// Handle callback URL from authorization.
-    /// - Parameter url: The callback URL
+    ///
+    /// Call this when the app receives the redirect URI via universal link (onOpenURL).
+    ///
+    /// - Parameter url: The callback URL received from the universal link
     /// - Returns: true if verification succeeded, false otherwise
     public func handleCallback(url: URL) async -> Bool {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -112,21 +77,18 @@ public final class AgeWallet {
         let error = params["error"]
         let errorDescription = params["error_description"]
 
-        // Handle error response
         if let error = error {
             print("[AgeWallet] Authorization error: \(error) - \(errorDescription ?? "")")
             storage.clearOidcState()
             return false
         }
 
-        // Validate required parameters
         guard let code = code, let state = state else {
             print("[AgeWallet] Missing code or state in callback")
             storage.clearOidcState()
             return false
         }
 
-        // Validate state matches stored state
         guard let storedOidc = storage.getOidcState(), storedOidc.state == state else {
             print("[AgeWallet] Invalid state or session expired")
             storage.clearOidcState()
@@ -134,10 +96,7 @@ public final class AgeWallet {
         }
 
         do {
-            // Exchange code for tokens
             let tokenResponse = try await exchangeCode(code: code, verifier: storedOidc.verifier)
-
-            // Fetch user info to verify age claim
             let userInfo = try await fetchUserInfo(accessToken: tokenResponse.accessToken)
 
             guard userInfo.ageVerified else {
@@ -146,7 +105,6 @@ public final class AgeWallet {
                 return false
             }
 
-            // Store verification state
             let expiresAt = Date().timeIntervalSince1970 * 1000 + Double(tokenResponse.expiresIn * 1000)
             storage.setVerification(VerificationState(
                 accessToken: tokenResponse.accessToken,
@@ -242,8 +200,6 @@ public final class AgeWallet {
 /// Errors that can occur during AgeWallet operations.
 public enum AgeWalletError: Error {
     case invalidConfiguration
-    case cancelled
-    case sessionFailed
     case tokenExchangeFailed
     case userInfoFailed
 }
@@ -264,19 +220,4 @@ private struct UserInfo {
 
 private struct UserInfoJSON: Decodable {
     let age_verified: Bool?
-}
-
-// MARK: - Presentation Context Provider
-
-@available(iOS 14.0, macOS 11.0, *)
-private class PresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
-    private let anchor: ASPresentationAnchor
-
-    init(anchor: ASPresentationAnchor) {
-        self.anchor = anchor
-    }
-
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        anchor
-    }
 }
