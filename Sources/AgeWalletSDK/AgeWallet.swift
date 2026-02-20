@@ -20,6 +20,7 @@ import AuthenticationServices
 public final class AgeWallet {
     private let config: AgeWalletConfig
     private let storage = Storage()
+    private var authSession: ASWebAuthenticationSession?
 
     /// Initialize AgeWallet SDK.
     /// - Parameter config: SDK configuration
@@ -70,7 +71,8 @@ public final class AgeWallet {
             let session = ASWebAuthenticationSession(
                 url: authURL,
                 callbackURLScheme: scheme
-            ) { callbackURL, error in
+            ) { [weak self] callbackURL, error in
+                self?.authSession = nil
                 if let error = error {
                     continuation.resume(throwing: error)
                 } else if let callbackURL = callbackURL {
@@ -83,7 +85,10 @@ public final class AgeWallet {
             session.presentationContextProvider = PresentationContextProvider(anchor: anchor)
             session.prefersEphemeralWebBrowserSession = false
 
+            self.authSession = session
+
             if !session.start() {
+                self.authSession = nil
                 continuation.resume(throwing: AgeWalletError.sessionFailed)
             }
         }
