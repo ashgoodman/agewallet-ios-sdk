@@ -59,18 +59,19 @@ public final class AgeWallet {
             throw AgeWalletError.invalidConfiguration
         }
 
-        // Get callback URL scheme
+        // Get callback URL scheme — use nil for https/http so universal links handle the callback
         guard let redirectURL = URL(string: config.redirectUri),
               let scheme = redirectURL.scheme else {
             storage.clearOidcState()
             throw AgeWalletError.invalidConfiguration
         }
+        let callbackScheme: String? = (scheme == "https" || scheme == "http") ? nil : scheme
 
         // Start authentication session
         let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
             let session = ASWebAuthenticationSession(
                 url: authURL,
-                callbackURLScheme: scheme
+                callbackURLScheme: callbackScheme
             ) { [weak self] callbackURL, error in
                 self?.authSession = nil
                 if let error = error {
