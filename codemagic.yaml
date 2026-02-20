@@ -11,7 +11,7 @@ workflows:
     scripts:
       - name: Register test devices
         script: |
-          app-store-connect devices register --name "Ash's iPhone" --udid "00008150-001A0DE826B8401C"
+          app-store-connect devices register --name "Ash's iPhone" --udid "00008150-001A0DE826B8401C" --ignore-registration-errors
       - name: Set up code signing
         script: |
           app-store-connect fetch-signing-files "io.agewallet.sdk.demo.ios" \
