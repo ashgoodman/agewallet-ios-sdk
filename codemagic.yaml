@@ -33,16 +33,10 @@ workflows:
         script: xcode-project use-profiles
       - name: Build IPA
         script: |
-          xcodebuild \
-            -project example/AgeWalletDemo/AgeWalletDemo.xcodeproj \
-            -scheme AgeWalletDemo \
-            -archivePath build/ios/xcarchive/AgeWalletDemo.xcarchive \
-            -destination 'generic/platform=iOS' \
-            archive \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            DEVELOPMENT_TEAM=F5T3W2C69Y \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            CODE_SIGN_STYLE=Manual
+          xcode-project build-ipa \
+            --project example/AgeWalletDemo/AgeWalletDemo.xcodeproj \
+            --scheme AgeWalletDemo \
+            --archive-flags="-destination 'generic/platform=iOS' COMPILER_INDEX_STORE_ENABLE=NO DEVELOPMENT_TEAM=F5T3W2C69Y CODE_SIGN_IDENTITY='Apple Distribution' CODE_SIGN_STYLE=Manual"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
