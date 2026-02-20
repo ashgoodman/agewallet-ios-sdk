@@ -5,15 +5,26 @@ workflows:
     integrations:
       app_store_connect: AgeWallet ASC API Key
     environment:
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: io.agewallet.sdk.demo.ios
+      groups:
+        - ios_signing
       xcode: latest
     scripts:
       - name: Register test devices
         script: |
           app-store-connect devices register --name "Ash's iPhone" --udid "00008150-001A0DE826B8401C" --ignore-registration-errors
       - name: Set up code signing
+        script: |
+          app-store-connect fetch-signing-files "io.agewallet.sdk.demo.ios" \
+            --type IOS_APP_ADHOC \
+            --create \
+            --verbose
+          keychain initialize
+          app-store-connect certificates list \
+            --type IOS_DISTRIBUTION \
+            --save \
+            --verbose
+          keychain add-certificates
+      - name: Apply code signing to Xcode project
         script: xcode-project use-profiles
       - name: Build IPA
         script: |
