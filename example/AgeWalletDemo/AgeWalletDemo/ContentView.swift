@@ -6,7 +6,7 @@ struct ContentView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
 
-    private let ageWallet = AgeWallet(config: AgeWalletConfig(
+    @State private var ageWallet = AgeWallet(config: AgeWalletConfig(
         clientId: "239472f9-3398-47ea-ad13-fe9502a0eb33",
         redirectUri: "https://agewallet-sdk-demo.netlify.app/callback"
     ))
@@ -28,7 +28,10 @@ struct ContentView: View {
         .onAppear {
             checkVerification()
         }
-        .alert("Error", isPresented: .constant(errorMessage != nil)) {
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
             Button("OK") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
