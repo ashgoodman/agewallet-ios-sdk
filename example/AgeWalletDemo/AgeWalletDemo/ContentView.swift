@@ -35,8 +35,13 @@ struct ContentView: View {
             Task {
                 let result = await ageWallet.handleCallback(url: url)
                 await MainActor.run {
-                    isVerified = result
+                    isVerified = result == .success
                     isLoading = false
+                    if result == .denied {
+                        errorMessage = "Age verification was cancelled."
+                    } else if result == .failed {
+                        errorMessage = "Verification could not be completed. Please try again."
+                    }
                 }
             }
         }

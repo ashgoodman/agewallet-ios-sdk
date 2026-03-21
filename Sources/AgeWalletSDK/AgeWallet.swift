@@ -65,8 +65,8 @@ public final class AgeWallet {
     /// Call this when the app receives the redirect URI via universal link (onOpenURL).
     ///
     /// - Parameter url: The callback URL received from the universal link
-    /// - Returns: true if verification succeeded, false otherwise
-    public func handleCallback(url: URL) async -> Bool {
+    /// - Returns: AgeWalletResult indicating the outcome
+    public func handleCallback(url: URL) async -> AgeWalletResult {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let params = components?.queryItems?.reduce(into: [String: String]()) { result, item in
             result[item.name] = item.value
@@ -80,19 +80,19 @@ public final class AgeWallet {
         if let error = error {
             print("[AgeWallet] Authorization error: \(error) - \(errorDescription ?? "")")
             storage.clearOidcState()
-            return false
+            return errorDescription == "The user denied the request" ? .denied : .failed
         }
 
         guard let code = code, let state = state else {
             print("[AgeWallet] Missing code or state in callback")
             storage.clearOidcState()
-            return false
+            return .failed
         }
 
         guard let storedOidc = storage.getOidcState(), storedOidc.state == state else {
             print("[AgeWallet] Invalid state or session expired")
             storage.clearOidcState()
-            return false
+            return .failed
         }
 
         do {
@@ -102,7 +102,7 @@ public final class AgeWallet {
             guard userInfo.ageVerified else {
                 print("[AgeWallet] Age verification failed")
                 storage.clearOidcState()
-                return false
+                return .failed
             }
 
             let expiresAt = Date().timeIntervalSince1970 * 1000 + Double(tokenResponse.expiresIn * 1000)
@@ -113,11 +113,11 @@ public final class AgeWallet {
             ))
 
             storage.clearOidcState()
-            return true
+            return .success
         } catch {
             print("[AgeWallet] Error during token exchange: \(error)")
             storage.clearOidcState()
-            return false
+            return .failed
         }
     }
 
@@ -196,6 +196,18 @@ public final class AgeWallet {
 }
 
 // MARK: - Supporting Types
+
+/// Result of an age verification callback.
+public enum AgeWalletResult {
+    /// Verification completed successfully.
+    case success
+
+    /// User denied consent on the AgeWallet screen.
+    case denied
+
+    /// Verification process failed (identity check unsuccessful).
+    case failed
+}
 
 /// Errors that can occur during AgeWallet operations.
 public enum AgeWalletError: Error {
