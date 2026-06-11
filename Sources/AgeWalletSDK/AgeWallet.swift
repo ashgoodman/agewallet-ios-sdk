@@ -21,13 +21,20 @@ import Foundation
 /// ```
 @available(iOS 14.0, macOS 11.0, *)
 public final class AgeWallet {
+    /// Maximum byte length for the metadata string (matches server-side limit).
+    public static let metadataMaxBytes = 4096
+
     private let config: AgeWalletConfig
     private let storage = Storage()
+
+    /// Runtime metadata value (mutable via setMetadata). Initialised from config.metadata.
+    private var currentMetadata: String?
 
     /// Initialize AgeWallet SDK.
     /// - Parameter config: SDK configuration
     public init(config: AgeWalletConfig) {
         self.config = config
+        self.currentMetadata = config.metadata
     }
 
     /// Check if the user is currently verified.
@@ -36,15 +43,32 @@ public final class AgeWallet {
         storage.getVerification()?.isVerified ?? false
     }
 
+    /// Update the metadata default attached to subsequent verifications.
+    /// Pass nil to clear. Validates length; throws `AgeWalletError.invalidMetadata` if > 4096 bytes.
+    public func setMetadata(_ value: String?) throws {
+        try validateMetadata(value)
+        currentMetadata = value
+    }
+
+    /// Return the metadata that round-tripped with the current persisted verification, or nil.
+    public func getMetadata() -> String? {
+        storage.getVerification()?.metadata
+    }
+
     /// Build the authorization URL to open in a browser.
     ///
     /// Opens this URL in Safari (or any browser). After the user authenticates,
     /// the server redirects to your redirect URI. iOS delivers that URL to the app
     /// via universal links — pass it to `handleCallback(url:)`.
     ///
+    /// - Parameter metadata: Optional per-call override. Does NOT change the instance default.
     /// - Returns: The authorization URL to open
-    /// - Throws: AgeWalletError.invalidConfiguration if the config is invalid
-    public func buildVerificationURL() throws -> URL {
+    /// - Throws: AgeWalletError.invalidConfiguration if the config is invalid,
+    ///           AgeWalletError.invalidMetadata if metadata exceeds 4096 bytes.
+    public func buildVerificationURL(metadata: String? = nil) throws -> URL {
+        let effectiveMetadata = metadata ?? currentMetadata
+        try validateMetadata(effectiveMetadata)
+
         let verifier = Security.generateVerifier()
         let challenge = Security.generateChallenge(from: verifier)
         let state = Security.generateState()
@@ -52,12 +76,19 @@ public final class AgeWallet {
 
         storage.setOidcState(OidcState(state: state, verifier: verifier, nonce: nonce))
 
-        guard let authURL = buildAuthURL(challenge: challenge, state: state, nonce: nonce) else {
+        guard let authURL = buildAuthURL(challenge: challenge, state: state, nonce: nonce, metadata: effectiveMetadata) else {
             storage.clearOidcState()
             throw AgeWalletError.invalidConfiguration
         }
 
         return authURL
+    }
+
+    private func validateMetadata(_ value: String?) throws {
+        guard let value = value else { return }
+        if value.utf8.count > Self.metadataMaxBytes {
+            throw AgeWalletError.invalidMetadata
+        }
     }
 
     /// Handle callback URL from authorization.
@@ -109,7 +140,8 @@ public final class AgeWallet {
             storage.setVerification(VerificationState(
                 accessToken: tokenResponse.accessToken,
                 expiresAt: expiresAt,
-                isVerified: true
+                isVerified: true,
+                metadata: userInfo.metadata
             ))
 
             storage.clearOidcState()
@@ -129,10 +161,10 @@ public final class AgeWallet {
 
     // MARK: - Private Methods
 
-    private func buildAuthURL(challenge: String, state: String, nonce: String) -> URL? {
+    private func buildAuthURL(challenge: String, state: String, nonce: String, metadata: String?) -> URL? {
         var components = URLComponents(string: config.endpoints.auth)
 
-        components?.queryItems = [
+        var items: [URLQueryItem] = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: config.clientId),
             URLQueryItem(name: "redirect_uri", value: config.redirectUri),
@@ -143,6 +175,11 @@ public final class AgeWallet {
             URLQueryItem(name: "nonce", value: nonce)
         ]
 
+        if let metadata = metadata, !metadata.isEmpty {
+            items.append(URLQueryItem(name: "metadata", value: metadata))
+        }
+
+        components?.queryItems = items
         return components?.url
     }
 
@@ -191,7 +228,7 @@ public final class AgeWallet {
         }
 
         let json = try JSONDecoder().decode(UserInfoJSON.self, from: data)
-        return UserInfo(ageVerified: json.age_verified ?? false)
+        return UserInfo(ageVerified: json.age_verified ?? false, metadata: json.metadata)
     }
 }
 
@@ -214,6 +251,7 @@ public enum AgeWalletError: Error {
     case invalidConfiguration
     case tokenExchangeFailed
     case userInfoFailed
+    case invalidMetadata
 }
 
 private struct TokenResponse {
@@ -228,8 +266,10 @@ private struct TokenResponseJSON: Decodable {
 
 private struct UserInfo {
     let ageVerified: Bool
+    let metadata: String?
 }
 
 private struct UserInfoJSON: Decodable {
     let age_verified: Bool?
+    let metadata: String?
 }

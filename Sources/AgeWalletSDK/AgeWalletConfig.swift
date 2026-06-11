@@ -11,19 +11,26 @@ public struct AgeWalletConfig {
     /// Custom endpoint configuration (optional).
     public let endpoints: AgeWalletEndpoints
 
+    /// Optional opaque per-verification metadata string (max 4096 bytes).
+    /// Attached to every verification unless overridden per-call.
+    public let metadata: String?
+
     /// Initialize AgeWallet configuration.
     /// - Parameters:
     ///   - clientId: Your AgeWallet client ID
     ///   - redirectUri: The redirect URI registered with AgeWallet
     ///   - endpoints: Custom endpoints (optional, uses defaults if not provided)
+    ///   - metadata: Optional opaque string (max 4096 bytes) attached to verifications
     public init(
         clientId: String,
         redirectUri: String,
-        endpoints: AgeWalletEndpoints = AgeWalletEndpoints()
+        endpoints: AgeWalletEndpoints = AgeWalletEndpoints(),
+        metadata: String? = nil
     ) {
         self.clientId = clientId
         self.redirectUri = redirectUri
         self.endpoints = endpoints
+        self.metadata = metadata
     }
 }
 
@@ -49,6 +56,14 @@ struct VerificationState: Codable {
     let accessToken: String
     let expiresAt: TimeInterval
     let isVerified: Bool
+    let metadata: String?
+
+    init(accessToken: String, expiresAt: TimeInterval, isVerified: Bool, metadata: String? = nil) {
+        self.accessToken = accessToken
+        self.expiresAt = expiresAt
+        self.isVerified = isVerified
+        self.metadata = metadata
+    }
 }
 
 /// OIDC state for callback validation.

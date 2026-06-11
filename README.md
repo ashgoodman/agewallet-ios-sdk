@@ -77,6 +77,30 @@ let config = AgeWalletConfig(
 )
 ```
 
+### Metadata (optional)
+
+Attach an opaque per-verification string (max 4096 UTF-8 bytes) that round-trips through `/userinfo` and is visible to your backend and the AgeWallet dashboard. Useful for tagging build, environment, or user-flow context.
+
+```swift
+// Set as the instance default at construction
+let ageWallet = AgeWallet(config: AgeWalletConfig(
+    clientId: "your-client-id",
+    redirectUri: "https://yourapp.com/callback",
+    metadata: "checkout-flow"
+))
+
+// Update the default at runtime
+try ageWallet.setMetadata("new-default")
+
+// Override for a single verification only (does not change the default)
+let url = try ageWallet.buildVerificationURL(metadata: "one-shot")
+
+// Read the metadata that round-tripped with the current verification
+let received = ageWallet.getMetadata()
+```
+
+Maximum size is `AgeWallet.metadataMaxBytes` (4096). `setMetadata`/`buildVerificationURL` throw `AgeWalletError.invalidMetadata` if the value exceeds the limit.
+
 ## Universal Links Setup
 
 To handle the OAuth callback via Universal Links:
